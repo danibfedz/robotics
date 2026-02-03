@@ -7,7 +7,7 @@ Antes de empezar **RECORDAR** meter las credenciales "admin" y "password" en la 
 
 ## 1º Parte: SOFTWARE
 Este seria mi workflow de NODE-RED:
-![Workflow](MARKETING/uo_flow.png)
+[Workflow](MARKETING/uo_flow.png)
 La parte recuadrada en rojo seria el flow que agrege para la alarma. Consta de un :
 
 -> Un json, para transformar los datos que me dan de texto (string) a objeto, y asi pueda las demas funciones leerlo e interactuar con él
@@ -63,3 +63,5 @@ Ademas de esto, como la idea era que fuera portatil, tambien hice una caja, para
 
 Y con esto doy por concluido mi trabajao/prototipo, al que llame GERAS, en la mitologia griega el dios protector de los ancianos
 ![Logo](MARKETING/GERASlogo.png)
+
+(Si quieres ver un video de como funciona https://github.com/danibfedz/robotics/blob/master/MARKETING/videoprueba1.mp4)
