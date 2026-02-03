@@ -7,7 +7,7 @@ Antes de empezar **RECORDAR** meter las credenciales "admin" y "password" en la 
 
 ## 1º Parte: SOFTWARE
 Este seria mi workflow de NODE-RED:
-[Workflow](MARKETING/uo_flow.png)
+![Workflow](MARKETING/uo_flow.png)
 La parte recuadrada en rojo seria el flow que agrege para la alarma. Consta de un :
 
 -> Un json, para transformar los datos que me dan de texto (string) a objeto, y asi pueda las demas funciones leerlo e interactuar con él
