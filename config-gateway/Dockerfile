@@ -3,7 +3,9 @@ FROM nodered/node-red
 # Copy package.json to the WORKDIR so npm builds all of your added nodes modules for Node-RED
 WORKDIR /data
 #COPY package.json /data# Copy package.json to the WORKDIR so npm builds all of your added nodes modules for Node-RED
+# Install new flows
 
+RUN npm install --unsafe-perm node-red-contrib-telegrambot
 WORKDIR /usr/src/node-red
 
 # Copy _your_ Node-RED project files into place

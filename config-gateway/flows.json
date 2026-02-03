@@ -2,9 +2,9 @@
     {
         "id": "3e781a4b2c825fa8",
         "type": "mqtt in",
-        "z": "f6f2187d.f17ca8",
-        "name": "MTTQ Client",
-        "topic": "devices/SEN01/data",
+        "z": "356127748e520e14",
+        "name": "",
+        "topic": "sensors/ACC01/data",
         "qos": "2",
         "datatype": "auto-detect",
         "broker": "45af8ced2735ea49",
@@ -12,38 +12,56 @@
         "rap": true,
         "rh": 0,
         "inputs": 0,
-        "x": 170,
+        "x": 190,
         "y": 200,
         "wires": [
             [
-                "3bb68ab5fc3adea2"
+                "3bb68ab5fc3adea2",
+                "e306824eb80fcd9c"
             ]
         ]
     },
     {
+        "id": "16292710def5a487",
+        "type": "debug",
+        "z": "356127748e520e14",
+        "name": "debug",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 570,
+        "y": 100,
+        "wires": []
+    },
+    {
         "id": "3bb68ab5fc3adea2",
         "type": "function",
-        "z": "f6f2187d.f17ca8",
-        "name": "JSON Parser",
-        "func": "\nconst measure = {\n    device: \"SEN01\",\n    sensor: \"ACC01\",\n    value: JSON.parse(msg.payload),\n    datetime: new Date().toISOString()\n};\n\nmsg.payload = measure;\n\nreturn msg;",
+        "z": "356127748e520e14",
+        "name": "Payload",
+        "func": "\nconst measure = {\n    device: \"SEN01\",\n    sensor: \"T01\",\n    value: msg.payload,\n    datetime: new Date().toISOString()\n};\n\nmsg.payload = measure;\n\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 390,
+        "x": 380,
         "y": 200,
         "wires": [
             [
-                "23043ad8fa37ff5d",
-                "167b6be1fde9411a"
+                "16292710def5a487",
+                "23043ad8fa37ff5d"
             ]
         ]
     },
     {
         "id": "23043ad8fa37ff5d",
         "type": "http request",
-        "z": "f6f2187d.f17ca8",
+        "z": "356127748e520e14",
         "name": "Persist Backend",
         "method": "POST",
         "ret": "txt",
@@ -52,7 +70,7 @@
         "tls": "",
         "persist": false,
         "proxy": "",
-        "authType": "basic",
+        "authType": "",
         "senderr": false,
         "x": 640,
         "y": 200,
@@ -65,7 +83,7 @@
     {
         "id": "437db008ed3a6a17",
         "type": "debug",
-        "z": "f6f2187d.f17ca8",
+        "z": "356127748e520e14",
         "name": "Response",
         "active": true,
         "tosidebar": true,
@@ -80,10 +98,81 @@
         "wires": []
     },
     {
-        "id": "167b6be1fde9411a",
-        "type": "debug",
-        "z": "f6f2187d.f17ca8",
+        "id": "e306824eb80fcd9c",
+        "type": "json",
+        "z": "356127748e520e14",
         "name": "",
+        "property": "payload",
+        "action": "",
+        "pretty": false,
+        "x": 290,
+        "y": 300,
+        "wires": [
+            [
+                "34c13c7a240e17a6",
+                "cb05521eed219d84"
+            ]
+        ]
+    },
+    {
+        "id": "34c13c7a240e17a6",
+        "type": "function",
+        "z": "356127748e520e14",
+        "name": "Detectar caida",
+        "func": "// --- 1) Asegurar que msg.payload sea un objeto ---\nif (typeof msg.payload === \"string\") {\n    try {\n        msg.payload = JSON.parse(msg.payload);\n    } catch (e) {\n        node.warn(\"Payload no es JSON válido\");\n        return null;\n    }\n}\n\n// Si alguna vez te llega en formato wrapper: { value: { accX... } }\n// lo soportamos también:\nconst p = msg.payload;\nconst v = (p && p.value && typeof p.value === \"object\") ? p.value : p;\n\n// --- 2) Leer aceleraciones ---\nconst ax = Number(v.accX);\nconst ay = Number(v.accY);\nconst az = Number(v.accZ);\n\nif (!Number.isFinite(ax) || !Number.isFinite(ay) || !Number.isFinite(az)) {\n    node.warn(\"accX/accY/accZ no numéricos\");\n    return null;\n}\n\n// --- 3) Magnitud de aceleración ---\nconst totalAcc = Math.sqrt(ax*ax + ay*ay + az*az);\nv.totalAcc = totalAcc;  // lo guardo para el mensaje\n\n// --- 4) Parámetros (ajústalos) ---\nconst TRIGGER = 18;        // umbral de disparo (prueba 16–22)\nconst RESET  = 12;         // rearme (debe ser < TRIGGER)\nconst COOLDOWN_MS = 15000; // mínimo 15s entre alertas (evita spam)\n\n// --- 5) Lógica de disparo 1 vez por evento ---\nconst now = Date.now();\nconst last = context.get(\"lastAlarmTs\") || 0;\nlet armed = context.get(\"armed\");\nif (armed === undefined) armed = true;\n\n// Rearme cuando baja\nif (!armed && totalAcc < RESET) {\n    armed = true;\n    context.set(\"armed\", true);\n}\n\n// Disparo\nif (armed && totalAcc > msg.trigger) {\n    // cooldown extra por seguridad\n    if ((now - last) < COOLDOWN_MS) return null;\n\n    context.set(\"armed\", false);\n    context.set(\"lastAlarmTs\", now);\n\n    v.fall = true;\n    return msg;  // ✅ SOLO AQUÍ deja pasar al Telegram\n}\n\nreturn null;\n",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 480,
+        "y": 300,
+        "wires": [
+            [
+                "09fcd167a5a2073c",
+                "15f2d1e37525248f"
+            ]
+        ]
+    },
+    {
+        "id": "09fcd167a5a2073c",
+        "type": "function",
+        "z": "356127748e520e14",
+        "name": "Mensaje Telegram",
+        "func": "// Asegurar objeto\nconst p = msg.payload || {};\nconst v = (p.value && typeof p.value === \"object\") ? p.value : p;\n\n// IMPORTANTE: pon aquí TU chatId correcto\nconst CHAT_ID = 6584348431;\n\nconst total = Number(v.totalAcc);\nconst ts = v.timestamp || p.timestamp || \"N/A\";\n\nmsg.payload = {\n    chatId: CHAT_ID,\n    type: \"message\",\n    content:\n        \"⚠️ Aviso de una posible caída\\n\\n\" +\n        \"Aceleración total: \" + (Number.isFinite(total) ? total.toFixed(2) : \"N/A\") + \" m/s²\\n\" +\n        \"Hora: \" + ts\n};\n\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 690,
+        "y": 300,
+        "wires": [
+            [
+                "ff5e99e8ed7642ea",
+                "fcc1dbe8326fc9fe"
+            ]
+        ]
+    },
+    {
+        "id": "ff5e99e8ed7642ea",
+        "type": "telegram sender",
+        "z": "356127748e520e14",
+        "name": "",
+        "bot": "38d0784bcc3de4c2",
+        "haserroroutput": false,
+        "outputs": 1,
+        "x": 930,
+        "y": 300,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "fcc1dbe8326fc9fe",
+        "type": "debug",
+        "z": "356127748e520e14",
+        "name": "debug 1",
         "active": true,
         "tosidebar": true,
         "console": false,
@@ -91,8 +180,40 @@
         "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 630,
-        "y": 120,
+        "x": 860,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "15f2d1e37525248f",
+        "type": "debug",
+        "z": "356127748e520e14",
+        "name": "debug 2",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 600,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "cb05521eed219d84",
+        "type": "debug",
+        "z": "356127748e520e14",
+        "name": "debug 3",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 360,
+        "y": 420,
         "wires": []
     },
     {
@@ -123,5 +244,32 @@
         "willPayload": "",
         "willMsg": {},
         "sessionExpiry": ""
+    },
+    {
+        "id": "38d0784bcc3de4c2",
+        "type": "telegram bot",
+        "botname": "ggerass_bot",
+        "usernames": "",
+        "chatids": "",
+        "baseapiurl": "",
+        "testenvironment": false,
+        "updatemode": "polling",
+        "pollinterval": "300",
+        "usesocks": false,
+        "sockshost": "",
+        "socksprotocol": "socks5",
+        "socksport": "6667",
+        "socksusername": "anonymous",
+        "sockspassword": "",
+        "bothost": "",
+        "botpath": "",
+        "localbothost": "0.0.0.0",
+        "localbotport": "8443",
+        "publicbotport": "8443",
+        "privatekey": "",
+        "certificate": "",
+        "useselfsignedcertificate": false,
+        "sslterminated": false,
+        "verboselogging": false
     }
 ]
